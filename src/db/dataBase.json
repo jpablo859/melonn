@@ -1,5 +1,1 @@
-[
-    {
-        "name": "juan"
-    }
-]
+[{"seller":"juan pablo","shippingMethod":"avion","externalOrderNum":123,"buyerName":"viviana morales","buyerPhone":3103833635,"buyerEmail":"jpablo859@hotmail.com","shippingAdress":"heliconias etapa 2 casa 43","shippingCity":"Apartado","shippingRegion":"Antioquia","shippingCountry":"Colombia","items":[{"productName":"perfume","quantity":50,"weight":120},{"productName":"perfume 2","quantity":10,"weight":1200}],"date":"2021-02-09 18:12","internalOrderNum":"161291235000026"}]
