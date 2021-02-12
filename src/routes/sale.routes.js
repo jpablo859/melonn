@@ -92,13 +92,15 @@ router.post('/saveSale', async (req, res) => {
 
         const totWeight = newInsert.items.reduce(fnReduce, 0);
         
-        const {data:shpMethodDetail} = await axios.get(`https://yhua9e1l30.execute-api.us-east-1.amazonaws.com/sandbox/shipping-methods/1`, {
+        const {data:shpMethodDetail} = await axios.get(`https://yhua9e1l30.execute-api.us-east-1.amazonaws.com/sandbox/shipping-methods/${newInsert.shippingMethod.key}`, {
             headers: {
                 'x-api-key': API_KEY
             }
         });
 
-        if(totWeight > shpMethodDetail.rules.availability.byWeight.max) {
+        let availability = shpMethodDetail.rules.availability;
+
+        if(totWeight > availability.byWeight.max) {
             return res.json({
                 ok: false,
                 data: {
@@ -106,6 +108,80 @@ router.post('/saveSale', async (req, res) => {
                 }
             })
         }
+
+        if(NotBussinesDayApi.data.find(item => item === date.date)) return res.send({
+            ok:false,
+            data:{
+                message: 'Not a bussines day'
+            }
+        })
+        
+        let reqTimeDataType = availability.byRequestTime.dayType;
+        let hour = date.hour.split(':');
+        hour = parseInt(hour[0]*3600) + parseInt(hour[1]*60);
+
+
+        if(reqTimeDataType === "BUSINESS" && (availability.byRequestTime.toTimeOfDay*3600) < hour) return res.send({
+            ok:false,
+            data: {
+                message: 'Due to the time, it is not possible to place the order'
+            }
+        })
+
+        let priority = 1;
+
+        let cases = shpMethodDetail.rules.promisesParameters.cases;
+
+        let valueCase = 0;
+
+        while((cases[priority-1]) && cases[priority-1].priority === priority) {
+            if(cases[priority-1].condition.byRequestTime.dayType === "BUSINESS" && (cases[priority-1].condition.byRequestTime.toTimeOfDay*3600) < hour){
+                priority++;
+            } else {
+                valueCase = cases[priority-1].condition.byRequestTime.toTimeOfDay;
+                break;
+            }
+        }
+
+        if(valueCase === 0) return res.send({
+            ok:false,
+            data: {
+                message: 'Due to the time, it is not possible to place the order'
+            }
+        })
+
+        let prior = cases.find(item => item.priority === priority);
+
+        let minTypePromise = prior.packPromise.min.type;
+        let maxTypePromise = prior.packPromise.max.type;
+        console.log(maxTypePromise)
+        let minSum = prior.packPromise.min.deltaHours; 
+        let maxSum = prior.packPromise.max.deltaHours || prior.packPromise.max.deltaBusinessDays;
+
+        let minPromise = new Date();
+        let maxPromise = new Date();
+
+        if(minTypePromise === "DELTA-HOURS") {
+            minPromise.setDate(minPromise.getDate()+1)
+            minPromise.setHours(minSum);
+        } else if (minTypePromise === "DELTA-BUSINESSDAYS") {
+            minPromise = `${bussinesDay[minSum-1]} ${date.hour}`;
+        }
+
+        if(maxTypePromise === "DELTA-HOURS") {
+            maxPromise.setDate(minPromise.getDate()+1);
+            maxPromise.setHours(minSum);
+        } else if (maxTypePromise === "DELTA-BUSINESSDAYS") {
+            maxPromise = `${bussinesDay[maxSum-1]} ${date.hour}`;
+        }
+
+        const minMonth = minPromise.getMonth()+1 < 10 ? `0${minPromise.getMonth()+1}` : minPromise.getMonth()+1;
+        const minDay = minPromise.getDate() < 10 ? `0${minPromise.getDate()}` : minPromise.getDate();
+        const minHours = minPromise.getHours() < 10 ? `0${minPromise.getHours()}` : minPromise.getHours();
+        const minMinutes = minPromise.getMinutes() < 10 ? `0${minPromise.getMinutes()}` : minPromise.getMinutes();
+
+        newInsert.minPromise = `${minPromise.getFullYear()}-${minMonth}-${minDay} ${minHours}:${minMinutes}`;
+        newInsert.maxPromise = maxPromise
         
         const response = await list();
         
@@ -121,6 +197,7 @@ router.post('/saveSale', async (req, res) => {
         })
 
     } catch(err) {
+        console.log(err)
         res.json({
             ok:false,
             data: {
